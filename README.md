@@ -1,5 +1,8 @@
 # mixedSCGLR
 Supervised Component Generalised Linear Regression for mixed models
+
+An extension of the Schall's algorithm to combine Supervised-Component regression with GLMM estimation in the multivariate context.
+
 ``` r
 library(mixedSCGLR)
 # load sample data

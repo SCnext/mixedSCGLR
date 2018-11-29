@@ -5,8 +5,7 @@ Title: Supervised Component Generalised Linear Regression for mixed
 Version: 0.1.0
 Author: Jocelyn Chauvet [aut, cre]
 Maintainer: Jocelyn Chauvet <jocelyn.chauvet@umontpellier.fr>
-Description: More about what it does (maybe more than one line)
-    Use four spaces when indenting paragraphs within the Description.
+Description: An extension of the Schall's algorithm to combine Supervised-Component regression with GLMM estimation in the multivariate context.
 License: GPL (>= 2)
 Encoding: UTF-8
 LazyData: true
