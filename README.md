@@ -1,7 +1,20 @@
+[![CRAN\_Status\_Badge](https://www.r-pkg.org/badges/version/mixedSCGLR)](https://cran.r-project.org/package=mixedSCGLR)
+
 # mixedSCGLR
 Supervised Component Generalised Linear Regression for mixed models
 
 An extension of the Schall's algorithm to combine Supervised-Component regression with GLMM estimation in the multivariate context.
+
+## Installation
+
+``` r
+# Install release version from CRAN
+install.packages("mixedSCGLR")
+
+# Install development version from GitHub
+devtools::install_github("SCnext/mixedSCGLR")
+```
+## Example
 
 ``` r
 library(mixedSCGLR)
