@@ -2,14 +2,15 @@ Package: mixedSCGLR
 Type: Package
 Title: Supervised Component Generalised Linear Regression for mixed
         models
-Version: 0.1.0
+Version: 0.2.0
 Author: Jocelyn Chauvet [aut, cre]
 Maintainer: Jocelyn Chauvet <jocelyn.chauvet@umontpellier.fr>
-Description: An extension of the Schall's algorithm to combine Supervised-Component regression with GLMM estimation in the multivariate context.
+Description: An extension of the Schall's algorithm to combine Supervised-Component regression 
+    with GLMM estimation in the multivariate context. 
 License: GPL (>= 2)
 Encoding: UTF-8
 LazyData: true
 Imports: SCGLR, plsdepot
 RoxygenNote: 6.0.1
 NeedsCompilation: no
-Packaged: 2018-11-21 16:50:03 UTC; Jocelyn
+Packaged: 2018-12-14 08:49:10 UTC; Jocelyn
