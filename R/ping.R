@@ -13,17 +13,17 @@
 # u:      vector of initial loadings
 # method: structural relevance criterion
 # return: the FINAL updated loading vectors
-ping <- function(Z,X,AX,W,F,u,method) {
+ping <- function(Z,X,AX,W,F,u,method,resACP) {
   u_cur <- u
-  h_cur <- hFunct(Z=Z,X=X,AX=AX,W=W,u=u_cur,method=method)$h
-  u_new <- update_u(Z=Z,X=X,AX=AX,W=W,F=F,u=u_cur,method=method)
-  h_new <- hFunct(Z=Z,X=X,AX=AX,W=W,u=u_new,method=method)$h
+  h_cur <- hFunct(Z=Z,X=X,AX=AX,W=W,u=u_cur,method=method,resACP=resACP)$h
+  u_new <- update_u(Z=Z,X=X,AX=AX,W=W,F=F,u=u_cur,method=method,resACP=resACP)
+  h_new <- hFunct(Z=Z,X=X,AX=AX,W=W,u=u_new,method=method,resACP=resACP)$h
   ing_iter <- 0
   while((abs((h_new-h_cur)/h_cur)>method$epsilon)&(ing_iter<=method$maxiter)){
     u_cur <- u_new
     h_cur <- h_new
-    u_new <- update_u(Z=Z,X=X,AX=AX,W=W,F=F,u=u_cur,method=method)
-    h_new <- hFunct(Z=Z,X=X,AX=AX,W=W,u=u_new,method=method)$h
+    u_new <- update_u(Z=Z,X=X,AX=AX,W=W,F=F,u=u_cur,method=method,resACP=resACP)
+    h_new <- hFunct(Z=Z,X=X,AX=AX,W=W,u=u_new,method=method,resACP=resACP)$h
     ing_iter <- ing_iter+1
   }
   return(u_new)
@@ -41,22 +41,35 @@ ping <- function(Z,X,AX,W,F,u,method) {
 # u:      vector of initial loadings
 # method: structural relevance criterion
 # return: the CURRENT updated loading vectors
-update_u <- function(Z,X,AX,W,F,u,method){
-  out_h <- hFunct(Z=Z,X=X,AX=AX,W=W,u=u,method=method)
+update_u <- function(Z,X,AX,W,F,u,method,resACP){
+  out_h <- hFunct(Z=Z,X=X,AX=AX,W=W,u=u,method=method,resACP=resACP)
   if(is.null(F)) {
     m <- out_h$gradh/sqrt(sum(out_h$gradh^2))
   } else {
-    C <- (crossprod(X,F))#/nrow(X))
-    proj_C_ortho <- out_h$gradh - C%*%solve(crossprod(C),crossprod(C,out_h$gradh))
-    m <- c(proj_C_ortho / sqrt(sum(proj_C_ortho^2)))
+    no <- nrow(X)
+    po <- ncol(X)
+    if(po>no){
+      utilPCA = resACP$utilPCA#eigen(crossprod(x = X)/no,symmetric = TRUE)
+      pourcent.variance = resACP$pourcent.variance#utilPCA$values/sum(utilPCA$values)
+      nbcomp = resACP$nbcomp#max( which(c(pourcent.variance > (1/po))==TRUE ))
+      Xpc = resACP$Xpc#X%*%utilPCA$vectors[,1:nbcomp]
+      
+      C <- (crossprod(Xpc,F))#/nrow(X))
+      proj_C_ortho <- out_h$gradh - C%*%solve(crossprod(C),crossprod(C,out_h$gradh))
+      m <- c(proj_C_ortho / sqrt(sum(proj_C_ortho^2)))
+    }else{
+      C <- (crossprod(X,F))#/nrow(X))
+      proj_C_ortho <- out_h$gradh - C%*%solve(crossprod(C),crossprod(C,out_h$gradh))
+      m <- c(proj_C_ortho / sqrt(sum(proj_C_ortho^2)))
+    }
   }
-  h_m <- hFunct(Z=Z,X=X,AX=AX,W=W,u=m,method=method)$h
+  h_m <- hFunct(Z=Z,X=X,AX=AX,W=W,u=m,method=method,resACP=resACP)$h
   h_u <- out_h$h
   k <- 1
   while((h_m<h_u)&(k<method$bailout)){
     m <- c(u)+m
     m <- m/sqrt(sum(m^2))
-    h_m <- hFunct(Z=Z,X=X,AX=AX,W=W,u=m,method=method)$h
+    h_m <- hFunct(Z=Z,X=X,AX=AX,W=W,u=m,method=method,resACP=resACP)$h
     k <- k+1
   }
   u_new <- m
@@ -77,8 +90,23 @@ update_u <- function(Z,X,AX,W,F,u,method){
 #             - the value of h = (1-s)*log(psi) + s*log(phi)
 #               with psi = GOF = Goodness-Of-Fit and phi = SR = Structural Relevance
 #             - the values of phi, grad.phi, psi, grad.psi, and grad.h)
-hFunct<- function(Z,X,AX,W,u,method){
-  f <- c(X%*%u)
+hFunct<- function(Z,X,AX,W,u,method,resACP){
+  no <- nrow(X)
+  po <- ncol(X)
+  if(po>no){
+    # utilPCA = eigen(crossprod(x = X)/no,symmetric = TRUE)
+    # pourcent.variance = utilPCA$values/sum(utilPCA$values)
+    # nbcomp = max( which(c(pourcent.variance > (1/po))==TRUE ))
+    # Xpc = X%*%utilPCA$vectors[,1:nbcomp]
+    utilPCA = resACP$utilPCA
+    pourcent.variance = resACP$pourcent.variance
+    nbcomp = resACP$nbcomp
+    Xpc = resACP$Xpc
+    
+    f <- c(Xpc%*%u)
+  }else{
+    f <- c(X%*%u)
+  }
   psi <- 0
   gradpsi <- rep(0,length(u))
   if(!is.null(AX)){
@@ -97,12 +125,19 @@ hFunct<- function(Z,X,AX,W,u,method){
       psi <- psi+term1psi+term2psi
       #calculate grad.psi
       PiorthoPrimeWkZ <- WZk -  W[,k]*AX%*%solve(AXtWkAX,crossprod(AX,WZk))
-      XprimeprojorthoWZ <- crossprod(X,PiorthoPrimeWkZ)
-      term1 <- c(XprimeprojorthoWZ%*%crossprod(XprimeprojorthoWZ,u))/(scalsqpfpf)
-
-      WprojWkOrthof <- W[,k]*projWkforthoAX
-      term2 <-  scalsqpfZ*c(crossprod(X,WprojWkOrthof))/(scalsqpfpf^2)
-      gradpsi <- gradpsi +(term1-term2)
+      if(po>no){
+        XprimeprojorthoWZ <- crossprod(Xpc,PiorthoPrimeWkZ)
+        term1 <- c(XprimeprojorthoWZ%*%crossprod(XprimeprojorthoWZ,u))/(scalsqpfpf)
+        WprojWkOrthof <- W[,k]*projWkforthoAX
+        term2 <-  scalsqpfZ*c(crossprod(Xpc,WprojWkOrthof))/(scalsqpfpf^2)
+        gradpsi <- gradpsi +(term1-term2)
+      }else{
+        XprimeprojorthoWZ <- crossprod(X,PiorthoPrimeWkZ)
+        term1 <- c(XprimeprojorthoWZ%*%crossprod(XprimeprojorthoWZ,u))/(scalsqpfpf)
+        WprojWkOrthof <- W[,k]*projWkforthoAX
+        term2 <-  scalsqpfZ*c(crossprod(X,WprojWkOrthof))/(scalsqpfpf^2)
+        gradpsi <- gradpsi +(term1-term2)
+      }
     }
     gradpsi <- 2*gradpsi
   }else{
@@ -114,10 +149,17 @@ hFunct<- function(Z,X,AX,W,u,method){
       # calculate  psi
       psi <- psi+sum(scalsqpfZ/(scalsqpfpf))
       #calculate grad.psi
-      XprimeWZ <- crossprod(X,WZk) #X'W_k Z_k
-      term1 <- c(XprimeWZ%*%crossprod(XprimeWZ,u))/(scalsqpfpf)
-      term2 <-  scalsqpfZ*c(crossprod(X,W[,k]*f))/(scalsqpfpf^2)
-      gradpsi <- gradpsi +(term1-term2)
+      if(po>no){
+        XprimeWZ <- crossprod(Xpc,WZk) #X'W_k Z_k
+        term1 <- c(XprimeWZ%*%crossprod(XprimeWZ,u))/(scalsqpfpf)
+        term2 <-  scalsqpfZ*c(crossprod(Xpc,W[,k]*f))/(scalsqpfpf^2)
+        gradpsi <- gradpsi +(term1-term2)
+      }else{
+        XprimeWZ <- crossprod(X,WZk) #X'W_k Z_k
+        term1 <- c(XprimeWZ%*%crossprod(XprimeWZ,u))/(scalsqpfpf)
+        term2 <-  scalsqpfZ*c(crossprod(X,W[,k]*f))/(scalsqpfpf^2)
+        gradpsi <- gradpsi +(term1-term2)
+      }
     }
     gradpsi <- 2*gradpsi
   }
@@ -126,15 +168,24 @@ hFunct<- function(Z,X,AX,W,u,method){
   if(method$phi=="cv") {
     phi <- c(crossprod(f))/n
     # calculate grad.phi
-    gradphi <- c(2*crossprod(X,f/n))
+    if(po>no){
+      gradphi <- c(2*crossprod(Xpc,f/n))
+    }else{
+      gradphi <- c(2*crossprod(X,f/n))
+    }
   } else {
     ### calculate phi when method="vpi" (Variable Powered Inertia) with l>=1
     scalsqfX <- colSums(f*X/n)
-    XtWX <- crossprod(X)/n
     phi <- (sum((scalsqfX^2)^method$l))^(1/method$l)
     # calculate grad.phi
-    #gradphi <- 2*phi^(1-method$l)*rowSums(XtWX%*%diag(scalsqfX)^(2*method$l-1))
-    gradphi <- 2*phi^(1-method$l)*rowSums(XtWX%*%diag( (scalsqfX^2)^method$l * scalsqfX^(-1) ))
+    if(po>no){
+      XpcWX <- crossprod(Xpc, X)
+      gradphi <- 2*phi^(1-method$l)*rowSums(XpcWX%*%diag( (scalsqfX^2)^method$l * scalsqfX^(-1) ))
+    }else{
+      XtWX <- crossprod(X)/n
+      gradphi <- 2*phi^(1-method$l)*rowSums(XtWX%*%diag( (scalsqfX^2)^method$l * scalsqfX^(-1) ))
+      #gradphi <- 2*phi^(1-method$l)*rowSums(XtWX%*%diag(scalsqfX)^(2*method$l-1))
+    }
   }
   # s in [0..1]
   # h = log(psi)+method$s*log(phi)

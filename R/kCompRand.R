@@ -20,29 +20,29 @@
 # method:  structural relevance criterion
 oneCompRand <- function(Y, family, size=NULL,
                         X, AX=NULL, u=NULL, fMat=NULL, random, loffset=NULL,
-                        init.sigma = rep(1, ncol(Y)),
+                        init.sigma = rep(1, ncol(Y)), resACP,
                         method=SCGLR::methodSR("vpi", l=4, s=1/2,
                                                maxiter=1000, epsilon=10^-6, bailout=1000)){
-
+  
   # control
   muinf <- 1e-5
   if (is.null(q)) q<-1
-
+  
   # Useful dimensions
   n <- dim(X)[1]
   p <- dim(X)[2]
   q <- dim(Y)[2]
-
+  
   # Design random effects (grouped data)
   designXi <- model.matrix(~factor(random)-1)#,data=random)
   R <- table(random)
   N <- length(R)
-
+  
   # initialisation working variables Z, weights W, and variance components sigma
   mu0 <- apply(Y, 2, mean)
   mu0 <- matrix(mu0, n, q, byrow = TRUE)
   Z <- Y
-
+  
   if("bernoulli"%in%family)
   {
     tmu0 <- mu0[,family=="bernoulli"]
@@ -65,29 +65,43 @@ oneCompRand <- function(Y, family, size=NULL,
   if("gaussian"%in%family){
     Z[,family=="gaussian"] <- Y[,family=="gaussian"]
   }
-
+  
   # Z <- log(mu0/(50-mu0)) + (Y - mu0)/((mu0*(50-mu0))/50)
   # Z <- log(mu0) - loffset + (Y - mu0)/mu0
-
+  
   W <- matrix(1,sum(R),q)#/sum(R)
   sigma <- init.sigma#rep(1,q)#rgamma(q,1,1)
   eta.old <- 1e10
-
-
-
-
-
-
-
+  
+  
+  
+  
+  
+  
+  
   # INITIAL LOOP
   # ------------------------------------------------------------
-
+  
   # 1. PING
   #########
-  u.new = ping(Z=Z, X=X, AX=AX, W=W, F=fMat, u=u, method=method)
-  f = X %*% u.new
+  # resACP argument PING
+  u.new = ping(Z=Z, X=X, AX=AX, W=W, F=fMat, u=u, method=method, resACP=resACP)
+  if(p>n){
+    # utilPCA = eigen(crossprod(x = X)/n,symmetric = TRUE)
+    # pourcent.variance = utilPCA$values/sum(utilPCA$values)
+    # nbcomp = max( which(c(pourcent.variance > (1/p))==TRUE ))
+    # Xpc = X%*%utilPCA$vectors[,1:nbcomp]
+    # f = Xpc %*% u.new
+    utilPCA = resACP$utilPCA
+    pourcent.variance = resACP$pourcent.variance
+    nbcomp = resACP$nbcomp
+    Xpc = resACP$Xpc
+    f = Xpc %*% u.new
+  }else{
+    f = X %*% u.new
+  }
   T2 = cbind(1,AX,fMat,f)
-
+  
   # 2. Henderson's systems
   ########################
   m1 = crossprod(T2, T2)
@@ -99,7 +113,7 @@ oneCompRand <- function(Y, family, size=NULL,
   A <- rbind(cbind(m1, m3), cbind(m2,m4))
   b = rbind(b1, b2)
   coeffs.courants <-  solve(A,b)
-
+  
   # 3. Variance components
   ########################
   for(k in 1:q){
@@ -107,11 +121,11 @@ oneCompRand <- function(Y, family, size=NULL,
       (N - 1/sigma[k] * sum(diag(solve(crossprod(designXi, W[,k]*designXi) +
                                          1/as.vector(sigma[k]) * diag(N)))))
   }
-
+  
   # 4. Update
   ###########
   eta=cbind(T2,designXi)%*%coeffs.courants#[1:(ncol(T)+2)]
-
+  
   # etainf <- log(muinf)
   # indinf <- 1 * (eta < etainf)
   # eta <- eta * (1 - indinf) + etainf * indinf
@@ -157,34 +171,38 @@ oneCompRand <- function(Y, family, size=NULL,
   if("gaussian"%in%family){
     Z[,family=="gaussian"]<-Y[,family=="gaussian"]
   }
-
-
-
-
+  
+  
+  
+  
   u.old  <-  u.new
   sigma.old = sigma
   coeffs.courants.old = coeffs.courants
-
+  
   deltaEta = 10
   deltaU <- 10
   deltaSigma <-10
   # ------------------------------------------------------------
-
-
-
+  
+  
+  
   # WHILE LOOP
   # ------------------------------------------------------------
   compt <- 0
   while( ((deltaU > 10^(-6)) || (deltaSigma > 10^(-6)) || (deltaEta> 10^(-6)))
          && (compt<100)
   ){
-
+    
     # 1. PING
     #########
-    u.new = ping(Z=Z, X=X, AX=AX, W=W, F=fMat, u=u.old, method=method)
-    f = X %*% u.new
+    u.new = ping(Z=Z, X=X, AX=AX, W=W, F=fMat, u=u.old, method=method, resACP=resACP)
+    if(p>n){
+      f = Xpc %*% u.new
+    }else{
+      f = X %*% u.new
+    }
     T2 = cbind(1,AX,fMat,f)
-
+    
     # 2. Henderson's systems
     ########################
     for(k in 1:q){
@@ -197,18 +215,18 @@ oneCompRand <- function(Y, family, size=NULL,
       A <- rbind(cbind(m1, m3), cbind(m2,m4))
       b = rbind(b1, b2)
       coeffs.courants[,k] = solve(A,b)
-
+      
       # 3. Variance components
       ########################
       sigma[k] = (crossprod(coeffs.courants[(ncol(T2)+1):(ncol(T2)+N),k]))/
         (N - 1/sigma[k] * sum(diag(solve(crossprod(designXi, W[,k]*designXi) +
                                            1/as.vector(sigma[k]) * diag(N)))))
     }
-
+    
     # 4. Update
     ###########
     eta=cbind(T2,designXi)%*%coeffs.courants
-
+    
     # etainf <- log(muinf)
     # indinf <- 1 * (eta < etainf)
     # eta <- eta * (1 - indinf) + etainf * indinf
@@ -254,10 +272,10 @@ oneCompRand <- function(Y, family, size=NULL,
     if("gaussian"%in%family){
       Z[,family=="gaussian"]<-Y[,family=="gaussian"]
     }
-
-
-
-
+    
+    
+    
+    
     deltaEta = sum(colSums((eta.old - eta)^2))
     eta.old <- eta
     deltaU <- sum((u.new-u.old)^2)
@@ -267,7 +285,7 @@ oneCompRand <- function(Y, family, size=NULL,
     compt <- compt+1
   }
   # ------------------------------------------------------------
-
+  
   return(list(Z=Z,W=W,u=u.new,coefs=coeffs.courants,sigma=sigma,f=f))
 }
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -336,74 +354,145 @@ kCompRand <- function(Y, family, size=NULL,
                       init.sigma = rep(1, ncol(Y)), init.comp = "pca",
                       method=SCGLR::methodSR("vpi", l=4, s=1/2,
                                              maxiter=1000, epsilon=10^-6, bailout=1000)){
-
+  
+  # Control
+  if(is.null(colnames(Y))){
+    colnames(Y) <- paste("y",1:ncol(Y),sep="")
+  }
+  if(is.null(colnames(X))){
+    colnames(X) <- paste("x",1:ncol(X),sep="")
+  }
+  if(is.null(AX)){
+    ncolAX <- 0
+    colnamesAX <- NULL
+  }else{
+    ncolAX <- ncol(AX)
+    if(is.null(colnames(AX))){
+      colnamesAX <- paste("ax",1:ncol(AX),sep="")
+    }else{
+      colnamesAX <- colnames(AX)
+    }
+  }
+  
+  
+  
   # First component
   no <- nrow(X)
+  po <- ncol(X)
+  # Init resACP
+  resACP = NULL
+  if(po>no){
+    utilPCA = eigen(crossprod(x = X)/no,symmetric = TRUE)
+    pourcent.variance = utilPCA$values/sum(utilPCA$values)
+    nbcomp = max( which(c(pourcent.variance > (1/po))==TRUE ))
+    Xpc = X%*%utilPCA$vectors[,1:nbcomp]
+    #Stock
+    resACP = list(utilPCA=utilPCA, pourcent.variance=pourcent.variance, nbcomp=nbcomp, Xpc=Xpc)
+    if(init.comp=="pca"){u <- eigen(crossprod(x = Xpc)/no,symmetric = TRUE)$vector[,1]}
+    if(init.comp=="pls"){u <- as.vector(plsdepot::plsreg2(Xpc, Y, comps = 2, crosval = FALSE)$raw.wgs[,1])}
+  }else{
   if(init.comp=="pca"){u <- eigen(crossprod(x = X)/no,symmetric = TRUE)$vector[,1]}
   if(init.comp=="pls"){u <- as.vector(plsdepot::plsreg2(X, Y, comps = 2, crosval = FALSE)$raw.wgs[,1])}
+  }
+  # resACP in oneCompRand
   tmp <- oneCompRand(Y=Y, family=family, size=size,
                      X=X,AX=AX,u=u,random=random,loffset=loffset,
-                     init.sigma = init.sigma)
+                     init.sigma = init.sigma, resACP=resACP)
   uMat <- matrix(tmp$u,ncol=1)
   fMat <- matrix(tmp$f,ncol=1)
-
-
+  
+  
   # Higher rank component
   if(k>1){
     for(kk in seq(k-1)){
-      tmpX <- X-fMat%*%(solve(crossprod(fMat),crossprod(fMat,X)))
+      if(po>no){
+        tmpX <- Xpc-fMat%*%(solve(crossprod(fMat),crossprod(fMat,Xpc)))
+        if(init.comp=="pca"){
+          u <- eigen(crossprod(x = tmpX)/no,symmetric = TRUE)$vector[,1]
+          out_h <- hFunct(Z=tmp$Z,X=X,AX=AX,W=tmp$W,u=tmp$u,method=method,resACP=resACP)
+        }
+        if(init.comp=="pls"){
+          u.initial <- as.vector(plsdepot::plsreg2(tmpX, Y, comps = 2, crosval = FALSE)$raw.wgs[,1])
+          out_h <- hFunct(Z=tmp$Z,X=X,AX=AX,W=tmp$W,u=u.initial,method=method, resACP=resACP)
+        }
+      }else{
+        tmpX <- X-fMat%*%(solve(crossprod(fMat),crossprod(fMat,X)))
       if(init.comp=="pca"){
         u <- eigen(crossprod(x = tmpX)/no,symmetric = TRUE)$vector[,1]
-        out_h <- hFunct(Z=tmp$Z,X=X,AX=AX,W=tmp$W,u=tmp$u,method=method)
+        out_h <- hFunct(Z=tmp$Z,X=X,AX=AX,W=tmp$W,u=tmp$u,method=method, resACP=resACP)
       }
       if(init.comp=="pls"){
         u.initial <- as.vector(plsdepot::plsreg2(tmpX, Y, comps = 2, crosval = FALSE)$raw.wgs[,1])
-        out_h <- hFunct(Z=tmp$Z,X=X,AX=AX,W=tmp$W,u=u.initial,method=method)
+        out_h <- hFunct(Z=tmp$Z,X=X,AX=AX,W=tmp$W,u=u.initial,method=method, resACP=resACP)
       }
-      C <- (crossprod(X,fMat))#/nrow(X))
-      proj_C_ortho <- out_h$gradh - C%*%solve(crossprod(C),crossprod(C,out_h$gradh))
-      u <- c(proj_C_ortho / sqrt(sum(proj_C_ortho^2)))
+      }
+      
+      if(po>no){
+        C <- (crossprod(Xpc,fMat))
+        proj_C_ortho <- out_h$gradh - C%*%solve(crossprod(C),crossprod(C,out_h$gradh))
+        u <- c(proj_C_ortho / sqrt(sum(proj_C_ortho^2)))
+      }else{
+        C <- (crossprod(X,fMat))#/nrow(X))
+        proj_C_ortho <- out_h$gradh - C%*%solve(crossprod(C),crossprod(C,out_h$gradh))
+        u <- c(proj_C_ortho / sqrt(sum(proj_C_ortho^2)))
+      }
+      # resACP in oneCompRand
       tmp <- oneCompRand(Y=Y,family=family,size=size,
                          X=X,AX=AX,u=u,fMat=fMat,random=random,loffset=loffset,
-                         init.sigma=init.sigma, method=method)
+                         init.sigma=init.sigma, method=method, resACP=resACP)
       fMat <- cbind(fMat,tmp$f)
       uMat <- cbind(uMat,tmp$u)
     }
   }
+  
   colnames(fMat) <- paste("scr",1:ncol(fMat),sep="")
   colnames(uMat) <- paste("u",1:ncol(uMat),sep="")
   coefs <- tmp$coefs
-  rownames(coefs)[c(1,(ncol(AX)+(2:(k+1))))] <- c("intercept",colnames(fMat))
+  rownames(coefs)[c(1,(ncolAX+(2:(k+1))))] <- c("intercept",colnames(fMat))
   sigma <- tmp$sigma
   names(sigma) <- colnames(Y)
-
-
+  
+  
   # BLUE, BLUP, and LINEAR PREDICTOR
   designXi <- as.matrix(model.matrix(~ factor(random)-1))
   invsqrtm <- diag(apply(X,2,var))*(no-1)/no
   centerx <- apply(X,2,mean)
-  beta0 <- coefs[1,] - t(centerx)%*%invsqrtm%*%uMat%*%coefs[(ncol(AX)+(2:(k+1))),]
-  beta <- invsqrtm%*%uMat%*%coefs[(ncol(AX)+(2:(k+1))),]
+  if(po>no){
+    beta0 <- coefs[1,] - t(centerx)%*%invsqrtm%*%utilPCA$vectors[,1:nbcomp]%*%uMat%*%coefs[(ncolAX+(2:(k+1))),]
+    beta <- invsqrtm%*%utilPCA$vectors[,1:nbcomp]%*%uMat%*%coefs[(ncolAX+(2:(k+1))),]
+  }else{
+    beta0 <- coefs[1,] - t(centerx)%*%invsqrtm%*%uMat%*%coefs[(ncolAX+(2:(k+1))),]
+    beta <- invsqrtm%*%uMat%*%coefs[(ncolAX+(2:(k+1))),]
+  }
   beta.coefs <- rbind(beta0,beta)
   #browser()
-  beta <- as.data.frame(rbind(beta.coefs, as.matrix(coefs[2:(ncol(AX)+1),,drop=F])))
-  rownames(beta) <- c("Intercept",colnames(X),colnames(AX))
-  xi <- coefs[(ncol(AX)+(k+2)):nrow(coefs),]
-  lin.pred.cond <- cbind(1,as.matrix(X),as.matrix(AX),as.matrix(designXi))%*%as.matrix(rbind(beta,xi))
-  lin.pred <- cbind(1,as.matrix(X),as.matrix(AX))%*%as.matrix(beta)
+  if(!is.null(AX)){
+    beta <- as.data.frame(rbind(beta.coefs, as.matrix(coefs[2:(ncolAX+1),,drop=F])))
+  }else{
+    beta <- as.data.frame(beta.coefs)
+  }
+  rownames(beta) <- c("Intercept",colnames(X),colnamesAX)
+  xi <- coefs[(ncolAX+(k+2)):nrow(coefs),]
+  if(!is.null(AX)){
+    lin.pred <- cbind(1,as.matrix(X),as.matrix(AX))%*%as.matrix(beta)
+    lin.pred.cond <- cbind(1,as.matrix(X),as.matrix(AX),as.matrix(designXi))%*%as.matrix(rbind(beta,xi))
+  }else{
+    lin.pred <- cbind(1,as.matrix(X))%*%as.matrix(beta)
+    lin.pred.cond <- cbind(1,as.matrix(X),as.matrix(designXi))%*%as.matrix(rbind(beta,xi))
+  }
   inertia <- cor(as.matrix(X), fMat)
   inertia <- inertia^2
   inertia <- colMeans(inertia)
   names(inertia) <- colnames(fMat)
-
-
+  
+  
   # OUTPUTS
   out <- list(
     call=NULL,
     u=as.data.frame(uMat),
     comp=as.data.frame(fMat),
     compr=as.data.frame(fMat),
-    gamma=coefs[1:(ncol(AX)+k+1)],
+    gamma=coefs[1:(ncolAX+k+1)],
     beta=beta,
     sigma=sigma,
     lin.pred=lin.pred,
