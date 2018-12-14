@@ -8,6 +8,12 @@ An extension of the Schall's algorithm to combine Supervised-Component regressio
 ## Installation
 
 ``` r
+# Dependencies
+if (!("Rcpp" %in% installed.packages())) install.packages("Rcpp")
+if (!("SCGLR" %in% installed.packages())) install.packages("SCGLR")
+if (!("ggplot2" %in% installed.packages())) install.packages("ggplot2")
+if (!("plsdepot" %in% installed.packages())) install.packages("plsdepot")
+
 # Install release version from CRAN
 install.packages("mixedSCGLR")
 
